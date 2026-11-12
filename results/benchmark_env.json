@@ -1,0 +1,14 @@
+{
+  "cpu": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+  "logical_cores": 8,
+  "os": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "torch": "2.15.0+cpu",
+  "onnxruntime": "1.31.1",
+  "openvino": "2026.4.1-22982-e213a147257-releases/2026/4",
+  "ultralytics": "8.4.211",
+  "video": "highway.mp4 (150 frames for model-only timing, full video for pipeline)",
+  "imgsz": 640,
+  "repeats": 3,
+  "warmup_frames": 10
+}
