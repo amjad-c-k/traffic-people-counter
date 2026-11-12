@@ -11,7 +11,8 @@ Usage (from the project folder, venv active):
     python scripts/check_web.py models/yolo26n_int8.onnx
     python scripts/check_web.py models/yolo26n_fp32.onnx webgpu          # GPU backend
     python scripts/check_web.py models/yolo26n_fp32.onnx wasm isolate    # multi-threaded CPU
-Saves results/web_check.json.
+    python scripts/check_web.py track     # whole pipeline: crossing events vs Python
+Saves results/web_check.json (or results/web_tracking_check.json for "track").
 """
 import json
 import subprocess
@@ -80,26 +81,52 @@ def python_detections(model_path):
     return out
 
 
-def main(model=ROOT / "models" / "yolo26n_fp32.onnx", ep="auto", isolate=False):
-    Handler.isolate = isolate
-    dist = build(model)
+def run_in_browser(dist, query, timeout):
+    """Serve `dist`, open index.html?<query> in headless Edge, wait for the page's report."""
     server = ThreadingHTTPServer(("127.0.0.1", PORT), partial(Handler, directory=str(dist)))
     server.handle_error = lambda *a: None  # browser closing a download early is harmless noise
     threading.Thread(target=server.serve_forever, daemon=True).start()
-
-    url = f"http://127.0.0.1:{PORT}/index.html?ep={ep}&check={','.join(map(str, FRAMES))}"
     profile = tempfile.mkdtemp(prefix="edge_check_")  # throwaway profile: doesn't touch your real Edge
     edge = subprocess.Popen([str(EDGE), "--headless=new", f"--user-data-dir={profile}",
-                             "--autoplay-policy=no-user-gesture-required", "--enable-unsafe-webgpu", url],
+                             "--autoplay-policy=no-user-gesture-required", "--enable-unsafe-webgpu",
+                             f"http://127.0.0.1:{PORT}/index.html?{query}"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    finished = got_report.wait(timeout=180)
+    finished = got_report.wait(timeout=timeout)
     edge.kill()
     server.shutdown()
     if not finished:
-        sys.exit("No report from the browser within 180 s.")
+        sys.exit(f"No report from the browser within {timeout} s.")
     if "error" in report:
         sys.exit(f"Browser error:\n{report['error']}")
+    return report
 
+
+def check_tracking():
+    """Whole pipeline in the browser vs the Python reference (tests/fixtures/tracking_reference.json)."""
+    ref = json.loads((ROOT / "tests" / "fixtures" / "tracking_reference.json").read_text())
+    web = run_in_browser(build(), "track=1", timeout=600)
+    fmt = lambda e: f"#{e['trackId']} {e['className']} {e['direction']} @frame {e['frame']}"  # noqa: E731
+    py_events, web_events = [fmt(e) for e in ref["events"]], [fmt(e) for e in web["events"]]
+    same_ids = sum(sorted(w) == sorted(t["trackId"] for t in f["tracks"]) for w, f in zip(web["ids"], ref["frames"]))
+    print("Python events :", py_events)
+    print("Browser events:", web_events)
+    summary = {
+        "python_totals": ref["totals"], "browser_totals": web["totals"],
+        "identical_events": py_events == web_events,
+        "frames_with_identical_track_ids": f"{same_ids}/{len(ref['frames'])}",
+        "python_unique_ids": len({t["trackId"] for f in ref["frames"] for t in f["tracks"]}),
+        "browser_unique_ids": len({i for f in web["ids"] for i in f}),
+        "browser_seconds": round(web["seconds"], 1),
+        "browser_fps": round(web["frames"] / web["seconds"], 2),
+        "execution_provider": web["ep"],
+    }
+    (ROOT / "results" / "web_tracking_check.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+
+
+def main(model=ROOT / "models" / "yolo26n_fp32.onnx", ep="auto", isolate=False):
+    Handler.isolate = isolate
+    run_in_browser(build(model), f"ep={ep}&check={','.join(map(str, FRAMES))}", timeout=180)
     py = python_detections(model)
     rows, all_ious, all_dconf = [], [], []
     for n in FRAMES:
@@ -138,6 +165,9 @@ def main(model=ROOT / "models" / "yolo26n_fp32.onnx", ep="auto", isolate=False):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    if args and args[0] == "track":
+        check_tracking()
+        sys.exit()
     main(model=args[0] if args else ROOT / "models" / "yolo26n_fp32.onnx",
          ep=args[1] if len(args) > 1 else "auto",
          isolate=len(args) > 2 and args[2] == "isolate")
