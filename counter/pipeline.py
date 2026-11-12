@@ -37,7 +37,8 @@ def first_frame(video_path):
 
 
 def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
-                  classes=None, model_path="yolo26n.pt", detector=None, progress=None):
+                  classes=None, model_path="yolo26n.pt", detector=None, progress=None,
+                  max_seconds=None, max_width=None):
     """Run detection + tracking + counting on one video.
 
     line: two points given as FRACTIONS of width/height, e.g. ((0, 0.5), (1, 0.5))
@@ -45,6 +46,9 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
     classes: list of class names to count, e.g. ["car", "truck"]. None = all five.
     detector: reuse an already-loaded Detector (saves reloading the model in the app).
     progress: optional function(fraction_done) for progress bars.
+    max_seconds: only process the first N seconds (keeps a shared CPU responsive).
+    max_width: shrink wider frames to this width. YOLO resizes to 640 px internally
+               anyway, so detection barely changes, but decoding/drawing/encoding get cheaper.
     Returns a summary dict.
     """
     name_to_id = {v: k for k, v in CLASSES.items()}
@@ -61,6 +65,15 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    orig_size = f"{w}x{h}"
+
+    # Optional limits: stop after max_seconds, shrink frames wider than max_width.
+    max_frames = int(max_seconds * fps) if max_seconds else None
+    if max_frames and total:
+        total = min(total, max_frames)
+    scale = max_width / w if (max_width and w > max_width) else 1.0
+    if scale < 1.0:
+        w, h = int(w * scale) // 2 * 2, int(h * scale) // 2 * 2  # even sizes: H.264 requires them
 
     # Convert line fractions to pixel coordinates.
     a = (int(line[0][0] * w), int(line[0][1] * h))
@@ -74,10 +87,12 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
     writer = cv2.VideoWriter(str(raw_video), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     frame_idx, t_start = 0, time.perf_counter()
-    while True:
+    while max_frames is None or frame_idx < max_frames:
         ok, frame = cap.read()
         if not ok:
             break
+        if scale < 1.0:
+            frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)  # INTER_AREA: best for shrinking
         tracks = detector.track(frame)
         counter.update(tracks, frame_idx, fps)
         trails.update(tracks)
@@ -92,9 +107,10 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
         if progress and total:
             progress(frame_idx / total)
 
+    elapsed = time.perf_counter() - t_start  # measured before conversion: pipeline speed only
+    trimmed = max_frames is not None and frame_idx >= max_frames and cap.read()[0]  # frames were left over?
     cap.release()
     writer.release()
-    elapsed = time.perf_counter() - t_start  # measured before conversion: pipeline speed only
 
     if to_h264(raw_video, out_video):
         raw_video.unlink()
@@ -110,6 +126,9 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
 
     return {
         "frames": frame_idx,
+        "seconds_processed": round(frame_idx / fps, 1),
+        "trimmed": bool(trimmed),  # True if the video was longer than max_seconds
+        "original_resolution": orig_size,
         "resolution": f"{w}x{h}",
         "processing_fps": round(frame_idx / elapsed, 2),  # whole pipeline incl. drawing + writing
         "totals": counter.totals(),
