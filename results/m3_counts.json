@@ -1,0 +1,77 @@
+{
+  "video": "highway.mp4",
+  "line_y_frac": 0.5,
+  "totals": {
+    "IN": 1,
+    "OUT": 8
+  },
+  "by_class": {
+    "car IN": 1,
+    "car OUT": 8
+  },
+  "events": [
+    {
+      "track_id": 4,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 67,
+      "time_s": 2.68
+    },
+    {
+      "track_id": 13,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 118,
+      "time_s": 4.72
+    },
+    {
+      "track_id": 15,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 128,
+      "time_s": 5.12
+    },
+    {
+      "track_id": 20,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 156,
+      "time_s": 6.24
+    },
+    {
+      "track_id": 14,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 157,
+      "time_s": 6.28
+    },
+    {
+      "track_id": 26,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 170,
+      "time_s": 6.8
+    },
+    {
+      "track_id": 17,
+      "cls_name": "car",
+      "direction": "IN",
+      "frame": 211,
+      "time_s": 8.44
+    },
+    {
+      "track_id": 65,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 280,
+      "time_s": 11.2
+    },
+    {
+      "track_id": 75,
+      "cls_name": "car",
+      "direction": "OUT",
+      "frame": 327,
+      "time_s": 13.08
+    }
+  ]
+}
