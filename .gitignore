@@ -1,23 +1,41 @@
 # Python
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 
 # Secrets
 .env
 
-# Model weights (download automatically / host on Hugging Face)
+# Model weights: downloaded automatically (yolo26n.pt) or rebuilt by
+# scripts/export_models.py. Small files we really need can be force-added
+# with `git add -f`; anything > 50 MB goes to Hugging Face Hub instead.
 *.pt
+*.pth
 *.onnx
+*.engine
 *_openvino_model/
 *.bin
 
-# Datasets and generated outputs
+# Datasets
 datasets/
+
+# Generated outputs: videos and frames are large and can be re-created.
+# Small CSV/JSON results ARE committed (they back the numbers in the README).
 runs/
 results/*.mp4
+results/*.avi
+results/*.mov
 results/*.jpg
+results/*.png
+bus.jpg
 
-# Node / editor
+# Gradio cache
+.gradio/
+flagged/
+
+# Node / editor / OS
 node_modules/
 .vscode/
+Thumbs.db
+.DS_Store
