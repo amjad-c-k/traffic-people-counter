@@ -1,0 +1,7 @@
+{
+  "yolo26n.pt (PyTorch)": 5.54,
+  "yolo26n_fp32.onnx": 9.93,
+  "yolo26n_int8.onnx": 3.07,
+  "yolo26n_fp32_openvino_model": 10.1,
+  "yolo26n_int8_openvino_model": 3.36
+}

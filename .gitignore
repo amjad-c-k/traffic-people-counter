@@ -42,3 +42,6 @@ Thumbs.db
 
 # Local planning notes (not part of the project)
 CLAUDE.md
+
+# Exported models (rebuild with scripts/export_models.py)
+models/
