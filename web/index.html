@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traffic & People Counter</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #222; }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    canvas { width: 100%; height: auto; background: #111; border-radius: 8px; }
+    #status { margin: 8px 0; color: #555; font-variant-numeric: tabular-nums; }
+    video { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🚦 Traffic & People Counter</h1>
+  <p>YOLO26n object detection running entirely in your browser (ONNX Runtime Web).</p>
+  <div id="status">Starting...</div>
+  <canvas id="view"></canvas>
+  <video id="video" muted playsinline crossorigin="anonymous"></video>
+
+  <!-- ONNX Runtime Web from the jsDelivr CDN (pinned version, matches the Python benchmark) -->
+  <!-- ort.webgpu bundle: supports both the "webgpu" (GPU) and "wasm" (CPU) backends -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.webgpu.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

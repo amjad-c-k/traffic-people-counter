@@ -45,3 +45,6 @@ CLAUDE.md
 
 # Exported models (rebuild with scripts/export_models.py)
 models/
+
+# Built in-browser app (rebuild with scripts/build_web.py)
+web_dist/
