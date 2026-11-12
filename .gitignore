@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Model weights (download automatically / host on Hugging Face)
+*.pt
+*.onnx
+*_openvino_model/
+*.bin
+
+# Datasets and generated outputs
+datasets/
+runs/
+results/*.mp4
+results/*.jpg
+
+# Node / editor
+node_modules/
+.vscode/

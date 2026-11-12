@@ -1,0 +1,7 @@
+{
+  "model": "yolo26n.pt",
+  "video": "highway.mp4",
+  "resolution": "1280x720",
+  "frames": 150,
+  "avg_inference_fps": 21.45
+}
