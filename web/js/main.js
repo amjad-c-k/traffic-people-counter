@@ -13,6 +13,7 @@ const detector = new Detector();
 
 function setStatus(text) {
   statusEl.textContent = text;
+  console.log(`[status] ${text}`); // also in the browser console, handy for debugging
 }
 
 function draw(dets) {
