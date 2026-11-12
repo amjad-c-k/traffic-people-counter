@@ -3,14 +3,37 @@
 Used by both scripts/run_video.py (command line) and app.py (Gradio).
 """
 import csv
+import subprocess
 import time
 from pathlib import Path
 
 import cv2
+import imageio_ffmpeg
 
 from counter.detector import CLASSES, Detector
 from counter.draw import TrailBuffer, draw_line, draw_panel, draw_tracks
 from counter.line_counter import LineCounter
+
+
+def to_h264(src, dst):
+    """Re-encode a video to H.264, the codec web browsers can play.
+
+    OpenCV's pip build can only write 'mp4v', which browsers usually refuse.
+    imageio-ffmpeg ships its own ffmpeg program, so this works on Windows and Linux.
+    Returns True on success.
+    """
+    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(src),
+           "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+           "-movflags", "+faststart", str(dst)]  # faststart: video can start playing before fully downloaded
+    return subprocess.run(cmd).returncode == 0
+
+
+def first_frame(video_path):
+    """Read the first frame of a video (for the line preview)."""
+    cap = cv2.VideoCapture(str(video_path))
+    ok, frame = cap.read()
+    cap.release()
+    return frame if ok else None
 
 
 def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
@@ -45,8 +68,10 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
     counter = LineCounter(a, b)
     trails = TrailBuffer(length=20)
 
-    Path(out_video).parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(str(out_video), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    out_video = Path(out_video)
+    out_video.parent.mkdir(parents=True, exist_ok=True)
+    raw_video = out_video.with_name(out_video.stem + "_raw.mp4")  # mp4v first, converted at the end
+    writer = cv2.VideoWriter(str(raw_video), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     frame_idx, t_start = 0, time.perf_counter()
     while True:
@@ -69,7 +94,12 @@ def process_video(video_path, out_video, out_csv, line=((0.0, 0.5), (1.0, 0.5)),
 
     cap.release()
     writer.release()
-    elapsed = time.perf_counter() - t_start
+    elapsed = time.perf_counter() - t_start  # measured before conversion: pipeline speed only
+
+    if to_h264(raw_video, out_video):
+        raw_video.unlink()
+    else:  # conversion failed: keep the mp4v file so the user still gets a video
+        raw_video.replace(out_video)
 
     # CSV: one row per crossing event.
     with open(out_csv, "w", newline="") as f:
