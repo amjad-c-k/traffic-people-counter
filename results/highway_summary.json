@@ -1,0 +1,14 @@
+{
+  "frames": 330,
+  "resolution": "1280x720",
+  "processing_fps": 14.85,
+  "totals": {
+    "IN": 1,
+    "OUT": 8
+  },
+  "by_class": {
+    "car IN": 1,
+    "car OUT": 8
+  },
+  "events": 9
+}
