@@ -1,4 +1,6 @@
-"""Milestone 3: count objects crossing a line in the sample video.
+"""Line-count test: count objects crossing a horizontal line in a video.
+
+Prints every crossing event (ID, class, IN/OUT, time) and saves the totals.
 
 Usage (from the project folder, venv active):
     python scripts/count_test.py            # line at 50% of the frame height
@@ -34,7 +36,7 @@ def main(line_y_frac=0.5):
     counter = LineCounter(a, b)
     print(f"Line from {a} to {b}. IN = moving down (towards camera), OUT = moving up.\n")
 
-    out_path = RESULTS / "m3_counting.mp4"
+    out_path = RESULTS / "line_count_demo.mp4"
     writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
     frame_idx = 0
     while True:
@@ -45,7 +47,7 @@ def main(line_y_frac=0.5):
         for ev in counter.update(tracks, frame_idx, fps):
             print(f"t={ev.time_s:5.2f}s frame {ev.frame:3d}: #{ev.track_id} {ev.cls_name} {ev.direction}")
 
-        # Minimal drawing so the counts can be checked by eye (full overlay is milestone 4).
+        # Minimal drawing so the counts can be checked by eye (full overlay lives in counter/draw.py).
         cv2.line(frame, a, b, (0, 255, 255), 2)
         for t in tracks:
             x1, y1, x2, y2 = map(int, t.box)
@@ -69,9 +71,9 @@ def main(line_y_frac=0.5):
         "by_class": {f"{c} {d}": n for (c, d), n in sorted(counter.counts.items())},
         "events": [asdict(e) for e in counter.events],
     }
-    (RESULTS / "m3_counts.json").write_text(json.dumps(summary, indent=2))
+    (RESULTS / "line_counts.json").write_text(json.dumps(summary, indent=2))
     print(f"\nTotals: {summary['totals']}  by class: {summary['by_class']}")
-    print(f"Saved video -> {out_path.relative_to(ROOT)}  and results/m3_counts.json")
+    print(f"Saved video -> {out_path.relative_to(ROOT)}  and results/line_counts.json")
 
 
 if __name__ == "__main__":

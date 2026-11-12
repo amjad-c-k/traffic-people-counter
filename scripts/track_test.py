@@ -1,4 +1,7 @@
-"""Milestone 2: run ByteTrack on the sample video and check that IDs stay stable.
+"""Tracking test: run YOLO + ByteTrack on a video and check that IDs stay stable.
+
+Records how many frames each track ID lives; many very short-lived IDs would
+point to ID switches or flickering detections.
 
 Usage (from the project folder, venv active):
     python scripts/track_test.py
@@ -25,7 +28,7 @@ def main():
     cap = cv2.VideoCapture(str(VIDEO))
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps_in = cap.get(cv2.CAP_PROP_FPS)
-    out_path = RESULTS / "m2_tracking.mp4"
+    out_path = RESULTS / "tracking_demo.mp4"
     writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps_in, (w, h))
 
     frames_seen = defaultdict(list)  # track_id -> list of frame numbers it appeared in
@@ -43,7 +46,7 @@ def main():
         for t in tracks:
             frames_seen[t.track_id].append(frame_idx)
             track_class[t.track_id] = t.cls_name
-            # Minimal drawing just to check IDs by eye (proper overlay comes in milestone 4).
+            # Minimal drawing just to check IDs by eye (full overlay lives in counter/draw.py).
             x1, y1, x2, y2 = map(int, t.box)
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 0), 2)
             cv2.putText(frame, f"#{t.track_id} {t.cls_name}", (x1, y1 - 6),
@@ -77,7 +80,7 @@ def main():
         "short_tracks_under_10_frames": len(short),
         "avg_tracking_fps": round(frame_idx / track_time, 2),
     }
-    (RESULTS / "m2_tracking.json").write_text(json.dumps(stats, indent=2))
+    (RESULTS / "tracking_stats.json").write_text(json.dumps(stats, indent=2))
     print("\n" + json.dumps(stats, indent=2))
     print(f"Saved video -> {out_path.relative_to(ROOT)}")
 

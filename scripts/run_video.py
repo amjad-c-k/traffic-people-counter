@@ -1,4 +1,6 @@
-"""Milestone 4: process a video end to end and save annotated video + CSV.
+"""Process a video end to end: detect, track, count, draw.
+
+Saves the annotated video, a CSV of crossing events and a JSON summary to results/.
 
 Usage (from the project folder, venv active):
     python scripts/run_video.py

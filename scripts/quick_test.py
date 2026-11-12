@@ -1,4 +1,7 @@
-"""Milestone 1: run YOLO on one image and one short video, print detections.
+"""Quick detection test: run YOLO on one image and one short video.
+
+Prints every detection (class, confidence, box), saves annotated outputs and
+measures the model's average inference speed on CPU.
 
 Usage (from the project folder, venv active):
     python scripts/quick_test.py
@@ -35,7 +38,7 @@ def run_image(model):
     result = model(IMAGE, verbose=False)[0]
     print(f"Found {len(result.boxes)} objects:")
     print_detections(result)
-    out = RESULTS / "m1_image_detections.jpg"
+    out = RESULTS / "detection_sample.jpg"
     cv2.imwrite(str(out), result.plot())  # plot() draws boxes + labels on the image
     print(f"Saved annotated image -> {out.relative_to(ROOT)}")
 
@@ -49,7 +52,7 @@ def run_video(model):
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Video: {width}x{height}, {fps_in:.1f} fps, {total} frames")
 
-    out_path = RESULTS / "m1_video_detections.mp4"
+    out_path = RESULTS / "detection_demo.mp4"
     writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps_in, (width, height))
 
     # Warm-up: the first inference is slow (memory allocation), so don't time it.
@@ -85,5 +88,5 @@ if __name__ == "__main__":
     model = YOLO(MODEL_NAME)
     run_image(model)
     stats = run_video(model)
-    (RESULTS / "m1_quick_test.json").write_text(json.dumps(stats, indent=2))
-    print(f"Saved stats -> results/m1_quick_test.json")
+    (RESULTS / "detection_speed.json").write_text(json.dumps(stats, indent=2))
+    print("Saved stats -> results/detection_speed.json")
