@@ -25,11 +25,15 @@ class Track:
 
 
 class Detector:
-    def __init__(self, model_path="yolo26n.pt", classes=None, conf=0.25):
-        self.model = YOLO(model_path)
+    def __init__(self, model_path="yolo26n.pt", classes=None, conf=0.25, device="cpu"):
+        # model_path can be a PyTorch .pt file, an .onnx file or an OpenVINO
+        # "*_openvino_model" folder; Ultralytics picks the right engine.
+        # task="detect" is needed for exported files, which don't store it reliably.
+        self.model = YOLO(model_path, task="detect")
         # Only ask YOLO for the classes we want to count.
         self.class_ids = classes if classes is not None else list(CLASSES)
         self.conf = conf
+        self.device = device  # force CPU (OpenVINO would otherwise pick "AUTO", which may use an iGPU)
 
     def track(self, frame):
         """Detect + track objects in one frame. Call on consecutive frames of ONE video.
@@ -43,6 +47,7 @@ class Detector:
             tracker="bytetrack.yaml",
             classes=self.class_ids,
             conf=self.conf,
+            device=self.device,
             verbose=False,
         )[0]
 
