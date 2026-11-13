@@ -151,7 +151,9 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
     const left = Math.max(0, (total - n - 1) / speed);
     $("progress").value = (n + 1) / total;
     const where = detector.ep === "webgpu" ? "WebGPU" : "CPU";
-    setStatus(`Frame ${n + 1}/${total} · ${speed.toFixed(1)} FPS in your browser (${where}) · about ${Math.ceil(left)} s left`);
+    // The first frames include warm-up, so the time estimate is only shown after a few frames.
+    const eta = n >= 5 ? ` · about ${Math.ceil(left)} s left` : "";
+    setStatus(`Frame ${n + 1}/${total} · ${speed.toFixed(1)} FPS in your browser (${where})${eta}`);
   }
   return { counter, seconds: (performance.now() - t0) / 1000, frames: n };
 }
