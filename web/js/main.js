@@ -4,17 +4,22 @@ import { ByteTracker } from "./tracker.js";
 import { LineCounter, center } from "./lineCounter.js";
 import { COLORS, drawFrame, drawPreview } from "./draw.js";
 
-const MODEL_URL = "model/yolo26n.onnx";
+// Replaced at build time (scripts/build_web.py) with a short code that changes on every
+// deploy; adding it to URLs stops browsers from mixing old cached files with new ones.
+const VERSION = "__VERSION__";
+const MODEL_URL = `model/yolo26n.onnx?v=${VERSION}`;
 const SAMPLE_URL = "samples/highway.mp4";
 // Browsers don't tell us a video's frame rate, so we step through every video at a fixed
-// 25 frames per second of video time (the sample video's own rate). Fast mode: every 2nd step.
+// 25 frames per second of video time (the sample video's own rate).
 const STEP_FPS = 25;
 const MAX_WIDTH = 1280; // bigger videos are drawn/processed at this width (YOLO resizes to 640 anyway)
 
 const $ = (id) => document.getElementById(id);
 const video = $("video"), canvas = $("view"), ctx = canvas.getContext("2d");
-const detector = new Detector();
 const params = new URLSearchParams(location.search);
+// rect: dynamic-shape model, 16:9 video -> 640x384 input. ?rect=0 for fixed 640x640 models.
+// ?imgsz= is for speed tests only: 480 was NOT faster on WebGPU (measured) and misses small objects.
+const detector = new Detector({ rect: params.get("rect") !== "0", imgsz: Number(params.get("imgsz")) || 640 });
 let busy = false, stopRequested = false, lastEvents = [], videoName = "highway";
 
 // --- small UI helpers ------------------------------------------------------------------------
@@ -133,7 +138,7 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
   const t0 = performance.now();
   let n = 0;
   for (; n < total && !stopRequested; n++) {
-    const frame = n * step; // frame number in 25-fps units, so times stay correct in fast mode
+    const frame = n * step; // frame number in 25-fps units (step > 1 only in experiments)
     await seek((frame + 0.5) / STEP_FPS); // +0.5: land in the middle of the frame, not on its edge
     const dets = await detector.detect(video, w, h, { classIds });
     const tracks = tracker.update(dets, [w, h]).map((t) => ({ ...t, className: CLASSES[t.classId] }));
@@ -164,9 +169,9 @@ async function start() {
   stopRequested = false;
   updateButtons();
   try {
-    const { counter, seconds, frames } = await processVideo({
-      classIds: selectedClasses(), step: $("fastMode").checked ? 2 : 1,
-    });
+    // Every frame is processed: skipping frames (tested with step = 2) broke tracking, because
+    // ByteTrack needs a car's box to overlap itself between consecutive frames (9 -> 0 counts).
+    const { counter, seconds, frames } = await processVideo({ classIds: selectedClasses() });
     lastEvents = counter.events;
     const { IN, OUT } = counter.totals();
     setStatus(`${stopRequested ? "Stopped" : "Done"}: ${frames} frames in ${seconds.toFixed(0)} s · IN ${IN} · OUT ${OUT}`);
@@ -197,6 +202,7 @@ const report = (data) => fetch("/report", { method: "POST", body: JSON.stringify
 async function checkDetections(frameList) { // ?check=0,60,120: single-frame detections vs Python
   const results = {};
   let seekMs = 0, detectMs = 0;
+  const parts = { pre: 0, model: 0, post: 0 };
   await seek(0.5 / STEP_FPS); // warm-up (not timed): e.g. WebGPU compiles its GPU programs now
   await detector.detect(video, canvas.width, canvas.height);
   for (const n of frameList) {
@@ -206,10 +212,12 @@ async function checkDetections(frameList) { // ?check=0,60,120: single-frame det
     results[n] = await detector.detect(video, canvas.width, canvas.height);
     seekMs += t1 - t0;
     detectMs += performance.now() - t1;
+    for (const p in parts) parts[p] += detector.timings[p];
   }
   const k = frameList.length;
+  for (const p in parts) parts[p] = Math.round((parts[p] / k) * 10) / 10;
   await report({
-    results, msPerFrame: (seekMs + detectMs) / k, seekMs: seekMs / k, detectMs: detectMs / k,
+    results, msPerFrame: (seekMs + detectMs) / k, seekMs: seekMs / k, detectMs: detectMs / k, parts,
     crossOriginIsolated: self.crossOriginIsolated, wasmThreads: ort.env.wasm.numThreads, ep: detector.ep,
     userAgent: navigator.userAgent,
   });
@@ -221,6 +229,22 @@ async function runDevMode() {
     const ids = [];
     const { counter, seconds, frames } = await processVideo({ onFrame: (n, tracks) => ids.push(tracks.map((t) => t.trackId)) });
     return report({ events: counter.events, totals: counter.totals(), ids, seconds, frames, ep: detector.ep });
+  }
+  if (params.get("uitest")) { // ?uitest=1: drive the real controls like a visitor would
+    for (const [id, v] of [["leftY", "0.4"], ["rightY", "0.6"]]) {
+      $(id).value = v;
+      $(id).dispatchEvent(new Event("input"));
+    }
+    await new Promise((r) => setTimeout(r, 1500)); // let the preview redraw
+    const preview = canvas.toDataURL("image/png");
+    $("startBtn").click();
+    await new Promise((r) => setTimeout(r, 500));
+    while (busy) await new Promise((r) => setTimeout(r, 500));
+    return report({
+      preview, final: canvas.toDataURL("image/png"), status: $("status").textContent,
+      table: [...document.querySelectorAll("#countsBody tr")].map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
+      events: lastEvents.length, csvDisabled: $("csvBtn").disabled,
+    });
   }
   if (params.get("layout")) { // ?layout=1: does the page fit the window? (no sideways scrolling)
     return report({ innerWidth, scrollWidth: document.documentElement.scrollWidth, status: $("status").textContent });

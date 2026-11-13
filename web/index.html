@@ -75,8 +75,7 @@
 
       <div class="card">
         <h2>4. Run</h2>
-        <label><input id="fastMode" type="checkbox"> Fast mode (analyse every 2nd frame)</label>
-        <div class="row" style="margin-top:10px">
+        <div class="row">
           <button id="startBtn" class="primary" disabled>Start counting</button>
           <button id="stopBtn" disabled>Stop</button>
         </div>
@@ -107,7 +106,8 @@
     YOLO26n by <a href="https://github.com/ultralytics/ultralytics">Ultralytics</a> (AGPL-3.0) ·
     <a href="https://onnxruntime.ai/">ONNX Runtime Web</a> ·
     Sample video: <a href="https://www.pexels.com/video/elevated-view-of-highway-with-traffic-10995755/">Pexels</a> ·
-    <a href="https://github.com/amjad-c-k/traffic-people-counter">Source code on GitHub</a>
+    <a href="https://github.com/amjad-c-k/traffic-people-counter">Source code on GitHub</a> ·
+    version __VERSION__
   </footer>
 </main>
 <video id="video" muted playsinline></video>
@@ -115,6 +115,6 @@
 <!-- ONNX Runtime Web from the jsDelivr CDN (pinned version, matches the Python benchmark).
      The ort.webgpu bundle supports both the "webgpu" (GPU) and "wasm" (CPU) backends. -->
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.webgpu.min.js"></script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=__VERSION__"></script>
 </body>
 </html>
