@@ -10,8 +10,8 @@
   "identical_events": false,
   "frames_with_identical_track_ids": "126/330",
   "python_unique_ids": 17,
-  "browser_unique_ids": 17,
-  "browser_seconds": 43.5,
-  "browser_fps": 7.59,
+  "browser_unique_ids": 18,
+  "browser_seconds": 40.1,
+  "browser_fps": 8.24,
   "execution_provider": "webgpu"
 }

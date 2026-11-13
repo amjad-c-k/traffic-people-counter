@@ -91,6 +91,7 @@ def run_in_browser(dist, query, timeout):
     profile = tempfile.mkdtemp(prefix="edge_check_")  # throwaway profile: doesn't touch your real Edge
     edge = subprocess.Popen([str(EDGE), "--headless=new", f"--user-data-dir={profile}",
                              "--autoplay-policy=no-user-gesture-required", "--enable-unsafe-webgpu",
+                             *os.environ.get("EDGE_FLAGS", "").split(),  # extra browser flags for experiments
                              f"http://127.0.0.1:{PORT}/index.html?{query}"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     finished = got_report.wait(timeout=timeout)

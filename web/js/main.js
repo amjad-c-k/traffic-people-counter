@@ -16,6 +16,8 @@ const SAMPLE_URL = "samples/highway.mp4";
 const STEP_FPS = 25;
 const MAX_WIDTH = 1280; // bigger videos are drawn/processed at this width (YOLO resizes to 640 anyway)
 
+const BACKEND_NAMES = { webnn: "WebNN", webgpu: "WebGPU", wasm: "CPU" };
+
 const $ = (id) => document.getElementById(id);
 const video = $("video"), canvas = $("view"), ctx = canvas.getContext("2d");
 const params = new URLSearchParams(location.search);
@@ -204,6 +206,7 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
   const counter = new LineCounter(...line);
   const trails = new Map(); // trackId -> last 20 centre points
   const t0 = performance.now();
+  const recent = []; // timestamps + model times of the last frames, for the live speed display
   let n = 0;
   for (; n < total && !stopRequested; n++) {
     const frame = n * step; // frame number in 25-fps units (step > 1 only in experiments)
@@ -220,13 +223,15 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
     if (onFrame) onFrame(n, tracks);
     renderCounts(counter);
 
-    const elapsed = (performance.now() - t0) / 1000, speed = (n + 1) / elapsed;
-    const left = Math.max(0, (total - n - 1) / speed);
+    // Speed over the last 10 frames (not since the start), so it reflects the current speed.
+    const now = performance.now();
+    recent.push({ now, model: detector.timings.model });
+    if (recent.length > 11) recent.shift();
+    const fps = recent.length > 1 ? (recent.length - 1) / ((now - recent[0].now) / 1000) : 0;
+    const modelMs = recent.reduce((s, r) => s + r.model, 0) / recent.length;
     $("progress").value = (n + 1) / total;
-    const where = detector.ep === "webgpu" ? "WebGPU" : "CPU";
-    // The first frames include warm-up, so the time estimate is only shown after a few frames.
-    const eta = n >= 5 ? ` · about ${Math.ceil(left)} s left` : "";
-    setStatus(`Frame ${n + 1}/${total} · ${speed.toFixed(1)} FPS in your browser (${where})${eta}`);
+    const eta = n >= 5 ? ` · about ${Math.ceil((total - n - 1) / fps)} s left` : "";
+    setStatus(`Frame ${n + 1}/${total} · ${fps.toFixed(1)} FPS (${BACKEND_NAMES[detector.ep]}, model ${modelMs.toFixed(0)} ms/frame)${eta}`);
   }
   return { counter, seconds: (performance.now() - t0) / 1000, frames: n };
 }
@@ -364,7 +369,12 @@ async function main() {
   setStatus("Loading the sample video…");
   await loadVideo(SAMPLE_URL, "highway.mp4");
   if (await runDevMode() !== false) return;
-  setStatus(`Ready (${backend === "webgpu" ? "WebGPU: using your graphics chip" : "CPU mode"}). Press Start counting.`);
+  // Warm-up: the very first run is slow (the GPU compiles its programs), so do it now,
+  // while the visitor is still looking at the page, not during counting.
+  setStatus("Warming up the model…");
+  await detector.detect(video, canvas.width, canvas.height);
+  const where = { webnn: "WebNN: Windows ML engine", webgpu: "WebGPU: your graphics chip", wasm: "CPU mode, no GPU access" }[backend];
+  setStatus(`Ready (${where}). Press Start counting.`);
 }
 
 main().catch((err) => {
