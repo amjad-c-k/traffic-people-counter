@@ -232,13 +232,15 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
 
     // Speed over the last 10 frames (not since the start), so it reflects the current speed.
     const now = performance.now();
-    recent.push({ now, model: detector.timings.model });
+    recent.push({ now, model: detector.timings.model, seek: td - ts, pre: detector.timings.pre });
     if (recent.length > 11) recent.shift();
     const fps = recent.length > 1 ? (recent.length - 1) / ((now - recent[0].now) / 1000) : 0;
-    const modelMs = recent.reduce((s, r) => s + r.model, 0) / recent.length;
+    const avg = (k) => (recent.reduce((s, r) => s + r[k], 0) / recent.length).toFixed(0);
     $("progress").value = (n + 1) / total;
     const eta = n >= 5 ? ` · about ${Math.ceil((total - n - 1) / fps)} s left` : "";
-    setStatus(`Frame ${n + 1}/${total} · ${fps.toFixed(1)} FPS (${BACKEND_NAMES[detector.ep]}, model ${modelMs.toFixed(0)} ms/frame)${eta}`);
+    // Time per frame for each step, so a slow device shows where the time goes.
+    setStatus(`Frame ${n + 1}/${total} · ${fps.toFixed(1)} FPS (${BACKEND_NAMES[detector.ep]}) · ms per frame: ` +
+      `video seek ${avg("seek")}, prep ${avg("pre")}, model ${avg("model")}${eta}`);
   }
   // Average ms per frame for each step; logged so slow devices can be diagnosed from the console.
   const perFrame = Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / Math.max(n, 1))]));
