@@ -158,8 +158,13 @@ async function loadModel() {
     $("progress").value = total ? loaded / total : 0;
     setStatus(`Downloading model: ${mb(loaded)}${total ? ` / ${mb(total)}` : ""} MB (only on the first visit)…`);
   });
-  setStatus("Starting the AI engine (first visit also downloads ~15 MB)…");
-  const backend = await detector.load(bytes, params.get("ep") || "auto");
+  // The engine's own ~15 MB download can't report progress, so show a running timer instead:
+  // on a slow connection this step can take a minute, and a frozen message looks broken.
+  const t0 = performance.now();
+  const msg = () => `Starting the AI engine (first visit downloads ~15 MB)… ${Math.round((performance.now() - t0) / 1000)} s`;
+  setStatus(msg());
+  const timer = setInterval(() => { $("status").textContent = msg(); }, 1000);
+  const backend = await detector.load(bytes, params.get("ep") || "auto").finally(() => clearInterval(timer));
   $("progress").value = 0;
   return backend;
 }
