@@ -34,6 +34,13 @@ export class Detector {
     for (const backend of order) {
       if (backend === "webnn" && !("ml" in navigator)) { failures.push("webnn: not available in this browser"); continue; }
       if (backend === "webgpu" && !navigator.gpu) { failures.push("webgpu: not available in this browser"); continue; }
+      if (backend === "webgpu" && ep === "auto") {
+        // A "fallback" adapter is software pretending to be a GPU (e.g. hardware acceleration
+        // switched off). Measured: 7.4 s per frame vs ~0.25 s on the CPU backend, so skip it.
+        const gpu = await describeGpu();
+        this.gpuName = gpu.name;
+        if (gpu.software) { failures.push(`webgpu: software adapter (${gpu.name})`); this.softwareGpu = gpu.name; continue; }
+      }
       try {
         this.ep = backend;
         // WebNN needs a fixed input size; 640x384 (16:9 video) is a test shape here, and
@@ -108,6 +115,16 @@ export class Detector {
     this.timings = { pre: t1 - t0, model: t2 - t1, post: performance.now() - t2 };
     return dets;
   }
+}
+
+// Which graphics adapter does WebGPU give us, and is it real hardware or software emulation?
+export async function describeGpu() {
+  const adapter = await navigator.gpu?.requestAdapter().catch(() => null);
+  if (!adapter) return { name: "none", software: true };
+  const info = adapter.info || {};
+  const name = [info.vendor, info.architecture, info.description].filter(Boolean).join(" ") || "unknown GPU";
+  const software = Boolean(adapter.isFallbackAdapter || info.isFallbackAdapter || /swiftshader|basic render|llvmpipe/i.test(name));
+  return { name, software };
 }
 
 // Model output has shape [1, 84, N]: for each of N candidates (8400 on a 640x640 input),

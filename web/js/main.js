@@ -373,7 +373,12 @@ async function main() {
   // while the visitor is still looking at the page, not during counting.
   setStatus("Warming up the model…");
   await detector.detect(video, canvas.width, canvas.height);
-  const where = { webnn: "WebNN: Windows ML engine", webgpu: "WebGPU: your graphics chip", wasm: "CPU mode, no GPU access" }[backend];
+  const where = { webnn: "WebNN: Windows ML engine", webgpu: `WebGPU on ${detector.gpuName || "your GPU"}`, wasm: "CPU" }[backend];
+  if (backend === "wasm" && detector.softwareGpu) {
+    // We skipped a software-emulated GPU; tell the visitor how to get the real one.
+    return setStatus(`Ready (CPU). Your browser's GPU access is software-only (${detector.softwareGpu}). ` +
+      "For 2x speed turn on 'Use graphics acceleration when available' in browser settings and restart.");
+  }
   setStatus(`Ready (${where}). Press Start counting.`);
 }
 
