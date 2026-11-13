@@ -1,7 +1,10 @@
 {
   "frames": 330,
+  "seconds_processed": 13.2,
+  "trimmed": false,
+  "original_resolution": "1280x720",
   "resolution": "1280x720",
-  "processing_fps": 14.85,
+  "processing_fps": 10.84,
   "totals": {
     "IN": 1,
     "OUT": 8
