@@ -1,0 +1,6 @@
+setup,backend_used,model_ms,detect_ms,seek_ms,approx_fps_detection_only,boxes_matched_vs_python,note
+"WebGPU, square 640x640 input",webgpu,160.5,203.1,18.2,4.5,28/28,first browser version
+"WebGPU, rect 640x384 input",webgpu,109.5,144.1,18.9,6.1,28/28,used on the live site
+"CPU (WASM, 1 thread), rect",wasm,240.3,282.7,25.8,3.2,28/28,fallback without a GPU
+"WebGPU on software GPU, rect",webgpu,7534.7,7554.5,116.7,0.1,28/28,graphics acceleration off: the app now switches to CPU instead
+"WebNN, rect",webnn,47.9,96.2,24.4,8.3,28/28,experimental flag in Edge 157; used automatically once browsers enable it
