@@ -18,9 +18,11 @@ export class Detector {
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
   }
 
+  // model: URL or the downloaded model bytes (Uint8Array).
   // Backends: "webgpu" runs on the graphics chip (fast where supported), "wasm" on the CPU
   // (works everywhere). ep = "auto" tries WebGPU first and falls back to WASM.
-  async load(modelUrl, ep = "auto") {
+  async load(model, ep = "auto") {
+    const modelUrl = model;
     const order = ep === "auto" ? (navigator.gpu ? ["webgpu", "wasm"] : ["wasm"]) : [ep];
     for (const backend of order) {
       try {
