@@ -22,21 +22,38 @@ export class Detector {
   }
 
   // model: URL or the downloaded model bytes (Uint8Array).
-  // Backends: "webgpu" runs on the graphics chip (fast where supported), "wasm" on the CPU
-  // (works everywhere). ep = "auto" tries WebGPU first and falls back to WASM.
+  // Backends (fastest first, where the browser supports them):
+  //   "webnn"  - Windows' own ML engine (DirectML) via the WebNN API, runs on the graphics chip
+  //   "webgpu" - general GPU programs written by ONNX Runtime
+  //   "wasm"   - CPU, works everywhere
+  // ep = "auto" tries them in that order and keeps the first that works.
   async load(model, ep = "auto") {
-    const modelUrl = model;
-    const order = ep === "auto" ? (navigator.gpu ? ["webgpu", "wasm"] : ["wasm"]) : [ep];
+    this.model = model;
+    const order = ep === "auto" ? ["webnn", "webgpu", "wasm"] : [ep];
+    const failures = [];
     for (const backend of order) {
+      if (backend === "webnn" && !("ml" in navigator)) { failures.push("webnn: not available in this browser"); continue; }
+      if (backend === "webgpu" && !navigator.gpu) { failures.push("webgpu: not available in this browser"); continue; }
       try {
-        this.session = await ort.InferenceSession.create(modelUrl, { executionProviders: [backend] });
         this.ep = backend;
+        // WebNN needs a fixed input size; 640x384 (16:9 video) is a test shape here, and
+        // detect() makes a new session if the real video needs another shape.
+        this.session = await this.createSession(backend === "webnn" ? [384, 640] : null);
         return backend;
       } catch (err) {
         console.warn(`Backend ${backend} failed, trying the next one`, err);
+        failures.push(`${backend}: ${err.message}`);
       }
     }
-    throw new Error("Could not load the model with any backend.");
+    throw new Error(`Could not load the model with any backend. ${failures.join(" | ")}`);
+  }
+
+  async createSession(shape) {
+    const opts = { executionProviders: [this.ep === "webnn" ? { name: "webnn", deviceType: "gpu" } : this.ep] };
+    if (shape) opts.freeDimensionOverrides = { batch: 1, height: shape[0], width: shape[1] };
+    const session = await ort.InferenceSession.create(this.model, opts);
+    this.sessionShape = shape;
+    return session;
   }
 
   // Letterbox: scale the frame to fit 640x640 WITHOUT stretching, pad the rest with grey
@@ -76,6 +93,11 @@ export class Detector {
   async detect(source, srcW, srcH, { conf = 0.25, iou = 0.7, classIds = Object.keys(CLASSES).map(Number) } = {}) {
     const t0 = performance.now();
     const { tensor, r, left, top } = this.preprocess(source, srcW, srcH);
+    // WebNN sessions have a fixed input size: rebuild once if this video needs a different one.
+    const [, , inH, inW] = tensor.dims;
+    if (this.ep === "webnn" && (this.sessionShape[0] !== inH || this.sessionShape[1] !== inW)) {
+      this.session = await this.createSession([inH, inW]);
+    }
     const t1 = performance.now();
     const feeds = { [this.session.inputNames[0]]: tensor };
     const output = (await this.session.run(feeds))[this.session.outputNames[0]];

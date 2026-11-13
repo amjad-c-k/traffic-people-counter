@@ -115,8 +115,8 @@
 <video id="video" muted playsinline></video>
 
 <!-- ONNX Runtime Web from the jsDelivr CDN (pinned version, matches the Python benchmark).
-     The ort.webgpu bundle supports both the "webgpu" (GPU) and "wasm" (CPU) backends. -->
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.webgpu.min.js"></script>
+     The "all" bundle includes the WebNN, WebGPU and WASM (CPU) backends. -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.all.min.js"></script>
 <script type="module" src="js/main.js?v=__VERSION__"></script>
 </body>
 </html>
