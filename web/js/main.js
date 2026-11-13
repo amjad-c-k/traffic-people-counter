@@ -207,11 +207,17 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
   const trails = new Map(); // trackId -> last 20 centre points
   const t0 = performance.now();
   const recent = []; // timestamps + model times of the last frames, for the live speed display
+  const spent = { seek: 0, pre: 0, model: 0, post: 0, rest: 0 }; // total ms per step, for diagnosis
   let n = 0;
   for (; n < total && !stopRequested; n++) {
     const frame = n * step; // frame number in 25-fps units (step > 1 only in experiments)
+    const ts = performance.now();
     await seek((frame + 0.5) / STEP_FPS); // +0.5: land in the middle of the frame, not on its edge
+    const td = performance.now();
+    spent.seek += td - ts;
     const dets = await detector.detect(video, w, h, { classIds });
+    for (const k of ["pre", "model", "post"]) spent[k] += detector.timings[k];
+    const tr = performance.now();
     const tracks = tracker.update(dets, [w, h]).map((t) => ({ ...t, className: CLASSES[t.classId] }));
     counter.update(tracks, frame, STEP_FPS);
     for (const t of tracks) {
@@ -222,6 +228,7 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
     drawFrame(ctx, video, tracks, counter, trails);
     if (onFrame) onFrame(n, tracks);
     renderCounts(counter);
+    spent.rest += performance.now() - tr; // tracking + counting + drawing + table
 
     // Speed over the last 10 frames (not since the start), so it reflects the current speed.
     const now = performance.now();
@@ -233,7 +240,10 @@ async function processVideo({ classIds = Object.keys(CLASSES).map(Number), line 
     const eta = n >= 5 ? ` · about ${Math.ceil((total - n - 1) / fps)} s left` : "";
     setStatus(`Frame ${n + 1}/${total} · ${fps.toFixed(1)} FPS (${BACKEND_NAMES[detector.ep]}, model ${modelMs.toFixed(0)} ms/frame)${eta}`);
   }
-  return { counter, seconds: (performance.now() - t0) / 1000, frames: n };
+  // Average ms per frame for each step; logged so slow devices can be diagnosed from the console.
+  const perFrame = Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / Math.max(n, 1))]));
+  console.log("[timing] ms per frame:", JSON.stringify(perFrame));
+  return { counter, seconds: (performance.now() - t0) / 1000, frames: n, perFrame };
 }
 
 async function start() {
@@ -300,8 +310,8 @@ async function runDevMode() {
   if (params.get("check")) return checkDetections(params.get("check").split(",").map(Number));
   if (params.get("track")) { // ?track=1: whole pipeline with default settings, events vs Python
     const ids = [];
-    const { counter, seconds, frames } = await processVideo({ onFrame: (n, tracks) => ids.push(tracks.map((t) => t.trackId)) });
-    return report({ events: counter.events, totals: counter.totals(), ids, seconds, frames, ep: detector.ep });
+    const { counter, seconds, frames, perFrame } = await processVideo({ onFrame: (n, tracks) => ids.push(tracks.map((t) => t.trackId)) });
+    return report({ events: counter.events, totals: counter.totals(), ids, seconds, frames, ep: detector.ep, perFrame });
   }
   if (params.get("uitest")) { // ?uitest=1: drive the real controls like a visitor would
     // Drag the left end down to 40% height and the right end to 60%, with pointer events.
