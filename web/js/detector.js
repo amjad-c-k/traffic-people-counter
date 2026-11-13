@@ -1,4 +1,4 @@
-// YOLO26n object detection in the browser with ONNX Runtime Web.
+﻿// YOLO26n object detection in the browser with ONNX Runtime Web.
 // Mirrors what Ultralytics does in Python: letterbox -> model -> decode boxes -> NMS.
 /* global ort */
 
@@ -7,14 +7,17 @@ export const IMGSZ = 640;
 export const CLASSES = { 0: "person", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck" };
 
 const NUM_CLASSES = 80;
-const NUM_ANCHORS = 8400; // candidate boxes the model scores on a 640x640 input
+const STRIDE = 32; // the model's input sides must be multiples of 32
 
 export class Detector {
-  constructor() {
+  constructor({ rect = true, imgsz = IMGSZ } = {}) {
     this.session = null;
-    // Reusable 640x640 canvas for preprocessing (avoids allocating one per frame).
+    this.imgsz = imgsz; // model input size (640). 480 was tested: no faster on WebGPU, misses small objects
+    // rect = true: pad only up to the next multiple of 32 (e.g. 640x384 for 16:9 video) instead
+    // of a full 640x640 square, like Ultralytics does with PyTorch. Needs a dynamic-shape model.
+    this.rect = rect;
+    // Reusable canvas for preprocessing (avoids allocating one per frame).
     this.canvas = document.createElement("canvas");
-    this.canvas.width = this.canvas.height = IMGSZ;
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
   }
 
@@ -39,40 +42,56 @@ export class Detector {
   // Letterbox: scale the frame to fit 640x640 WITHOUT stretching, pad the rest with grey
   // (114,114,114), exactly like Ultralytics' LetterBox. Returns the tensor + how to undo it.
   preprocess(source, srcW, srcH) {
-    const r = Math.min(IMGSZ / srcW, IMGSZ / srcH);
+    const S = this.imgsz;
+    const r = Math.min(S / srcW, S / srcH);
     const newW = Math.round(srcW * r), newH = Math.round(srcH * r);
-    const left = Math.round((IMGSZ - newW) / 2 - 0.1);
-    const top = Math.round((IMGSZ - newH) / 2 - 0.1);
+    // Padding: full square, or (rect) only up to the next multiple of 32 on each side.
+    let padW = S - newW, padH = S - newH;
+    if (this.rect) { padW %= STRIDE; padH %= STRIDE; }
+    const inW = newW + padW, inH = newH + padH;
+    const left = Math.round(padW / 2 - 0.1);
+    const top = Math.round(padH / 2 - 0.1);
 
+    if (this.canvas.width !== inW || this.canvas.height !== inH) {
+      this.canvas.width = inW;
+      this.canvas.height = inH;
+    }
     this.ctx.fillStyle = "rgb(114,114,114)";
-    this.ctx.fillRect(0, 0, IMGSZ, IMGSZ);
+    this.ctx.fillRect(0, 0, inW, inH);
     this.ctx.drawImage(source, left, top, newW, newH);
-    const rgba = this.ctx.getImageData(0, 0, IMGSZ, IMGSZ).data;
+    const rgba = this.ctx.getImageData(0, 0, inW, inH).data;
 
     // Canvas gives RGBA pixel by pixel (HWC); the model wants RGB planes (CHW), values 0..1.
-    const plane = IMGSZ * IMGSZ;
+    const plane = inW * inH;
     const data = new Float32Array(3 * plane);
     for (let i = 0, p = 0; p < plane; i += 4, p++) {
       data[p] = rgba[i] / 255;
       data[p + plane] = rgba[i + 1] / 255;
       data[p + 2 * plane] = rgba[i + 2] / 255;
     }
-    return { tensor: new ort.Tensor("float32", data, [1, 3, IMGSZ, IMGSZ]), r, left, top };
+    return { tensor: new ort.Tensor("float32", data, [1, 3, inH, inW]), r, left, top };
   }
 
   // Run the model on a video frame / image. Returns [{box:[x1,y1,x2,y2], conf, classId, className}].
   async detect(source, srcW, srcH, { conf = 0.25, iou = 0.7, classIds = Object.keys(CLASSES).map(Number) } = {}) {
+    const t0 = performance.now();
     const { tensor, r, left, top } = this.preprocess(source, srcW, srcH);
+    const t1 = performance.now();
     const feeds = { [this.session.inputNames[0]]: tensor };
-    const output = (await this.session.run(feeds))[this.session.outputNames[0]].data;
-    return postprocess(output, { r, left, top, srcW, srcH, conf, iou, classIds });
+    const output = (await this.session.run(feeds))[this.session.outputNames[0]];
+    const t2 = performance.now();
+    const numAnchors = output.dims[2]; // 8400 for 640x640, 5040 for 640x384
+    const dets = postprocess(output.data, { numAnchors, r, left, top, srcW, srcH, conf, iou, classIds });
+    // Time spent in each step of the last frame (ms), for the speed check.
+    this.timings = { pre: t1 - t0, model: t2 - t1, post: performance.now() - t2 };
+    return dets;
   }
 }
 
-// Model output has shape [1, 84, 8400]: for each of 8400 candidates, 4 box numbers
-// (centre x, centre y, width, height) then 80 class scores. Stored row by row, so
-// value k of candidate i is at out[k * 8400 + i].
-export function postprocess(out, { r, left, top, srcW, srcH, conf, iou, classIds }) {
+// Model output has shape [1, 84, N]: for each of N candidates (8400 on a 640x640 input),
+// 4 box numbers (centre x, centre y, width, height) then 80 class scores. Stored row by row,
+// so value k of candidate i is at out[k * N + i].
+export function postprocess(out, { numAnchors: NUM_ANCHORS, r, left, top, srcW, srcH, conf, iou, classIds }) {
   const wanted = new Set(classIds);
   const candidates = [];
   for (let i = 0; i < NUM_ANCHORS; i++) {

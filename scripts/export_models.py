@@ -27,6 +27,9 @@ EXPORTS = [
     ("yolo26n_int8.onnx",            "onnx",     {"quantize": 8, "data": CALIB_DATA, "fraction": 1.0}),
     ("yolo26n_fp32_openvino_model",  "openvino", {}),
     ("yolo26n_int8_openvino_model",  "openvino", {"quantize": 8, "data": CALIB_DATA, "fraction": 1.0}),
+    # Flexible input size, used by the browser app: a 16:9 video becomes a 640x384 input
+    # instead of a padded 640x640 square (~40% less work, like PyTorch's "rect" inference).
+    ("yolo26n_dynamic.onnx",         "onnx",     {"dynamic": True}),
 ]
 
 

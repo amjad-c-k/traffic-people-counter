@@ -8,10 +8,10 @@
     "OUT": 8
   },
   "identical_events": false,
-  "frames_with_identical_track_ids": "213/330",
-  "python_unique_ids": 18,
+  "frames_with_identical_track_ids": "126/330",
+  "python_unique_ids": 17,
   "browser_unique_ids": 17,
-  "browser_seconds": 72.6,
-  "browser_fps": 4.55,
+  "browser_seconds": 43.5,
+  "browser_fps": 7.59,
   "execution_provider": "webgpu"
 }

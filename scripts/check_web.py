@@ -1,4 +1,4 @@
-"""Check that the browser version detects the same objects as Python.
+﻿"""Check that the browser version detects the same objects as Python.
 
 1. Builds web_dist/ and serves it on a local web server.
 2. Opens the page in headless Microsoft Edge with ?check=<frames>; the page runs
@@ -15,6 +15,7 @@ Usage (from the project folder, venv active):
 Saves results/web_check.json (or results/web_tracking_check.json for "track").
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,7 @@ from build_web import build  # noqa: E402
 from counter.detector import CLASSES  # noqa: E402
 
 FRAMES = [0, 60, 120, 150, 180, 240, 300]
+IMGSZ = int(os.environ.get("IMGSZ", 640))  # model input size to test (e.g. IMGSZ=480)
 EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 PORT = 8765
 report = {}
@@ -74,7 +76,7 @@ def python_detections(model_path):
     for n in FRAMES:
         cap.set(cv2.CAP_PROP_POS_FRAMES, n)
         ok, frame = cap.read()
-        r = model.predict(frame, classes=list(CLASSES), conf=0.25, iou=0.7, device="cpu", verbose=False)[0]
+        r = model.predict(frame, classes=list(CLASSES), conf=0.25, iou=0.7, imgsz=IMGSZ, device="cpu", verbose=False)[0]
         out[n] = [{"box": b, "conf": c, "cls": int(k)} for b, c, k in
                   zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist(), r.boxes.cls.tolist())]
     cap.release()
@@ -124,9 +126,10 @@ def check_tracking():
     print(json.dumps(summary, indent=2))
 
 
-def main(model=ROOT / "models" / "yolo26n_fp32.onnx", ep="auto", isolate=False):
+def main(model=ROOT / "models" / "yolo26n_dynamic.onnx", ep="auto", isolate=False):
     Handler.isolate = isolate
-    run_in_browser(build(model), f"ep={ep}&check={','.join(map(str, FRAMES))}", timeout=180)
+    rect = 1 if "dynamic" in Path(model).name else 0  # fixed 640x640 models need square input
+    run_in_browser(build(model), f"ep={ep}&rect={rect}&imgsz={IMGSZ}&check={','.join(map(str, FRAMES))}", timeout=180)
     py = python_detections(model)
     rows, all_ious, all_dconf = [], [], []
     for n in FRAMES:
@@ -153,6 +156,7 @@ def main(model=ROOT / "models" / "yolo26n_fp32.onnx", ep="auto", isolate=False):
         "browser_ms_per_frame": round(report["msPerFrame"], 1),
         "browser_seek_ms": round(report["seekMs"], 1),
         "browser_detect_ms": round(report["detectMs"], 1),
+        "browser_detect_parts_ms": report.get("parts"),  # pre = image prep, model = inference, post = decode + NMS
         "cross_origin_isolated": report["crossOriginIsolated"],
         "wasm_threads": report["wasmThreads"],
         "execution_provider": report["ep"],
@@ -168,6 +172,6 @@ if __name__ == "__main__":
     if args and args[0] == "track":
         check_tracking()
         sys.exit()
-    main(model=args[0] if args else ROOT / "models" / "yolo26n_fp32.onnx",
+    main(model=args[0] if args else ROOT / "models" / "yolo26n_dynamic.onnx",
          ep=args[1] if len(args) > 1 else "auto",
          isolate=len(args) > 2 and args[2] == "isolate")

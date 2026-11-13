@@ -1,4 +1,4 @@
-"""Record what the Python tracker does on the sample video, as a reference for the JS port.
+﻿"""Record what the Python tracker does on the sample video, as a reference for the JS port.
 
 For every frame it saves:
   - the detections the tracker received (box, confidence, class),
@@ -25,7 +25,7 @@ from counter import lap_fallback  # noqa: E402
 from counter.line_counter import LineCounter  # noqa: E402
 
 lap_fallback.install()
-MODEL = ROOT / "models" / "yolo26n_fp32.onnx"  # same model file the browser uses
+MODEL = ROOT / "models" / "yolo26n_dynamic.onnx"  # same model file the browser uses
 VIDEO = ROOT / "samples" / "highway.mp4"
 OUT = ROOT / "tests" / "fixtures" / "tracking_reference.json"
 ARGS = dict(classes=list(CLASSES), conf=0.25, iou=0.7, device="cpu", verbose=False)
