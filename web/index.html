@@ -21,15 +21,17 @@
     label { display: block; font-size: 0.9rem; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; }
     .checks label { display: inline-flex; align-items: center; gap: 4px; margin: 0 10px 6px 0; }
-    input[type=range] { width: 100%; }
-    .slider-label { display: flex; justify-content: space-between; margin-top: 8px; }
     button { font: inherit; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .file-btn { display: inline-block; padding: 9px 14px; border: 1px dashed #9aa3b2; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
     .file-btn input { display: none; }
     .hint { font-size: 0.8rem; color: var(--muted); margin: 6px 0 0; }
-    canvas { width: 100%; height: auto; display: block; background: #111; border-radius: 8px; }
+    canvas { width: 100%; height: auto; display: block; background: #111; border-radius: 8px; touch-action: none; }
+    canvas.editable { cursor: crosshair; }
+    canvas.grab { cursor: grab; }
+    canvas.grabbing { cursor: grabbing; }
+    .canvas-hint { margin: 0 0 8px; font-size: 0.9rem; background: #fff8d6; border: 1px solid #f0dc8a; border-radius: 6px; padding: 6px 10px; }
     progress { width: 100%; height: 10px; margin-top: 10px; }
     #status { margin-top: 6px; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; min-height: 1.3em; }
     #status.error { color: #b3261e; }
@@ -66,11 +68,10 @@
 
       <div class="card">
         <h2>3. Counting line</h2>
-        <div class="slider-label"><span>Left end height</span><span id="leftVal"></span></div>
-        <input id="leftY" type="range" min="0.05" max="0.95" step="0.01" value="0.5">
-        <div class="slider-label"><span>Right end height</span><span id="rightVal"></span></div>
-        <input id="rightY" type="range" min="0.05" max="0.95" step="0.01" value="0.5">
-        <p class="hint">IN = crossing downwards (towards the camera), OUT = upwards.</p>
+        <p class="hint" style="margin-top:0">Drag the <strong>dots</strong> on the yellow line in the video: the end dots move
+          one end, the middle dot moves the whole line. A vehicle is counted once when its centre crosses the line.
+          The small arrows show which crossing direction counts as <strong>IN</strong> and which as <strong>OUT</strong>.</p>
+        <button id="resetLineBtn" style="margin-top:8px">Reset line</button>
       </div>
 
       <div class="card">
@@ -84,6 +85,7 @@
 
     <div>
       <div class="card">
+        <p class="canvas-hint" id="canvasHint">✋ Drag the yellow line's dots to place the counting line, then press <strong>Start counting</strong>.</p>
         <canvas id="view" width="1280" height="720"></canvas>
         <progress id="progress" value="0" max="1"></progress>
         <div id="status">Starting…</div>

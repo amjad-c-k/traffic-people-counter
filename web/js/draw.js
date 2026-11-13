@@ -61,8 +61,23 @@ export function drawFrame(ctx, video, tracks, counter, trails) {
   ctx.fillText(`IN ${IN}   OUT ${OUT}`, 22, 40);
 }
 
-// Before processing: the current video frame with the counting line, so it can be placed.
-export function drawPreview(ctx, video, a, b) {
+// Before processing: the current video frame with the counting line and its drag handles
+// (two ends + middle). `active` = the handle under the pointer, drawn bigger.
+export function drawPreview(ctx, video, a, b, active = null) {
   ctx.drawImage(video, 0, 0, ctx.canvas.width, ctx.canvas.height);
   drawLine(ctx, a, b);
+  const r = handleRadius(ctx.canvas);
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  for (const [name, [x, y]] of [["a", a], ["b", b], ["mid", mid]]) {
+    ctx.beginPath();
+    ctx.arc(x, y, name === active ? r * 1.35 : r, 0, 2 * Math.PI);
+    ctx.fillStyle = LINE_COLOR;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#222";
+    ctx.stroke();
+  }
 }
+
+// Handle size in canvas pixels, so it looks about the same on screen for any video size.
+export const handleRadius = (canvas) => Math.max(8, canvas.width / 90);

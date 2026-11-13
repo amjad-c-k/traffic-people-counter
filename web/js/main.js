@@ -2,7 +2,7 @@
 import { Detector, CLASSES } from "./detector.js";
 import { ByteTracker } from "./tracker.js";
 import { LineCounter, center } from "./lineCounter.js";
-import { COLORS, drawFrame, drawPreview } from "./draw.js";
+import { COLORS, drawFrame, drawPreview, handleRadius } from "./draw.js";
 
 // Replaced at build time (scripts/build_web.py) with a short code that changes on every
 // deploy; adding it to URLs stops browsers from mixing old cached files with new ones.
@@ -31,9 +31,14 @@ function setStatus(text, isError = false) {
 
 const selectedClasses = () => [...document.querySelectorAll("#classChecks input:checked")].map((el) => Number(el.value));
 
-function linePoints() {
+// The counting line, stored as fractions of the frame (0..1) so it fits any video size.
+// Default: horizontal across the middle, the same as the Python app.
+const DEFAULT_LINE = { a: [0, 0.5], b: [1, 0.5] };
+let line = structuredClone(DEFAULT_LINE);
+
+function linePoints() { // line in canvas pixels
   const w = canvas.width, h = canvas.height;
-  return [[0, Math.trunc(Number($("leftY").value) * h)], [w, Math.trunc(Number($("rightY").value) * h)]];
+  return [[Math.trunc(line.a[0] * w), Math.trunc(line.a[1] * h)], [Math.trunc(line.b[0] * w), Math.trunc(line.b[1] * h)]];
 }
 
 function updateButtons(ready = !!video.src) {
@@ -41,7 +46,12 @@ function updateButtons(ready = !!video.src) {
   $("stopBtn").disabled = !busy;
   $("sampleBtn").disabled = busy;
   $("fileInput").disabled = busy;
+  $("resetLineBtn").disabled = busy;
   $("csvBtn").disabled = busy || lastEvents.length === 0;
+  // The line can only be dragged before/after a run, not while counting.
+  $("canvasHint").hidden = busy;
+  if (busy) canvas.className = "";
+  else if (video.src) canvas.className = "editable";
 }
 
 function renderCounts(counter) {
@@ -62,10 +72,60 @@ function seek(t) { // wait until the video shows the frame at time t (seeking is
   });
 }
 
-async function showPreview() {
+async function showPreview(active = null) {
   if (!video.src || busy) return;
   if (video.currentTime === 0) await seek(0.5 / STEP_FPS);
-  drawPreview(ctx, video, ...linePoints());
+  drawPreview(ctx, video, ...linePoints(), active);
+}
+
+// --- dragging the counting line on the video -------------------------------------------------
+// Pointer events work for mouse, pen and touch. The canvas is shown scaled down, so pointer
+// positions are converted from screen pixels to canvas pixels first.
+function toCanvas(e) {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) * (canvas.width / r.width), (e.clientY - r.top) * (canvas.height / r.height)];
+}
+
+function handleAt([x, y]) { // which handle ("a", "b", "mid") is under the pointer, if any
+  const [a, b] = linePoints();
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const grab = handleRadius(canvas) * 2.2; // generous hit area, easier with a finger
+  for (const [name, [hx, hy]] of [["a", a], ["b", b], ["mid", mid]]) {
+    if (Math.hypot(x - hx, y - hy) <= grab) return name;
+  }
+  return null;
+}
+
+function wireLineDragging() {
+  let dragging = null, last = null;
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  canvas.addEventListener("pointerdown", (e) => {
+    if (busy || !video.src) return;
+    dragging = handleAt(toCanvas(e));
+    if (!dragging) return;
+    last = toCanvas(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* keeps moves coming outside the canvas; optional */ }
+    canvas.className = "grabbing";
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (busy || !video.src) return;
+    const p = toCanvas(e);
+    if (!dragging) { // just hovering: show which handle would be grabbed
+      const h = handleAt(p);
+      canvas.className = h ? "grab" : "editable";
+      showPreview(h);
+      return;
+    }
+    const dx = (p[0] - last[0]) / canvas.width, dy = (p[1] - last[1]) / canvas.height;
+    last = p;
+    for (const end of dragging === "mid" ? ["a", "b"] : [dragging]) {
+      line[end] = [clamp(line[end][0] + dx), clamp(line[end][1] + dy)];
+    }
+    showPreview(dragging);
+  });
+  const stop = () => { if (dragging) { dragging = null; canvas.className = "editable"; showPreview(); } };
+  canvas.addEventListener("pointerup", stop);
+  canvas.addEventListener("pointercancel", stop);
 }
 
 // --- loading ---------------------------------------------------------------------------------
@@ -121,7 +181,8 @@ async function loadVideo(source, name) {
   const secs = video.duration;
   $("videoInfo").textContent = `${name} · ${video.videoWidth}×${video.videoHeight} · ${secs.toFixed(1)} s`;
   await seek(0.5 / STEP_FPS);
-  drawPreview(ctx, video, ...linePoints());
+  await showPreview();
+  canvas.className = "editable";
   updateButtons(true);
 }
 
@@ -231,19 +292,29 @@ async function runDevMode() {
     return report({ events: counter.events, totals: counter.totals(), ids, seconds, frames, ep: detector.ep });
   }
   if (params.get("uitest")) { // ?uitest=1: drive the real controls like a visitor would
-    for (const [id, v] of [["leftY", "0.4"], ["rightY", "0.6"]]) {
-      $(id).value = v;
-      $(id).dispatchEvent(new Event("input"));
-    }
-    await new Promise((r) => setTimeout(r, 1500)); // let the preview redraw
+    // Drag the left end down to 40% height and the right end to 60%, with pointer events.
+    const r = canvas.getBoundingClientRect();
+    const screen = ([x, y]) => [r.left + (x / canvas.width) * r.width, r.top + (y / canvas.height) * r.height];
+    const drag = (from, to) => {
+      const [fx, fy] = screen(from), [tx, ty] = screen(to);
+      const ev = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }));
+      ev("pointerdown", fx, fy);
+      for (let i = 1; i <= 5; i++) ev("pointermove", fx + ((tx - fx) * i) / 5, fy + ((ty - fy) * i) / 5);
+      ev("pointerup", tx, ty);
+    };
+    const [a, b] = linePoints();
+    drag(a, [a[0], 0.4 * canvas.height]);
+    drag(b, [b[0], 0.6 * canvas.height]);
+    await new Promise((res) => setTimeout(res, 1500)); // let the preview redraw
     const preview = canvas.toDataURL("image/png");
+    const lineAfterDrag = structuredClone(line);
     $("startBtn").click();
     await new Promise((r) => setTimeout(r, 500));
     while (busy) await new Promise((r) => setTimeout(r, 500));
     return report({
       preview, final: canvas.toDataURL("image/png"), status: $("status").textContent,
       table: [...document.querySelectorAll("#countsBody tr")].map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
-      events: lastEvents.length, csvDisabled: $("csvBtn").disabled,
+      events: lastEvents.length, csvDisabled: $("csvBtn").disabled, lineAfterDrag,
     });
   }
   if (params.get("layout")) { // ?layout=1: does the page fit the window? (no sideways scrolling)
@@ -264,15 +335,8 @@ function buildClassChecks() {
 }
 
 function wireControls() {
-  for (const id of ["leftY", "rightY"]) {
-    $(id).addEventListener("input", () => {
-      $("leftVal").textContent = Number($("leftY").value).toFixed(2);
-      $("rightVal").textContent = Number($("rightY").value).toFixed(2);
-      showPreview();
-    });
-  }
-  $("leftVal").textContent = Number($("leftY").value).toFixed(2);
-  $("rightVal").textContent = Number($("rightY").value).toFixed(2);
+  wireLineDragging();
+  $("resetLineBtn").addEventListener("click", () => { line = structuredClone(DEFAULT_LINE); showPreview(); });
   $("startBtn").addEventListener("click", start);
   $("stopBtn").addEventListener("click", () => { stopRequested = true; setStatus("Stopping after this frame…"); });
   $("csvBtn").addEventListener("click", downloadCsv);
