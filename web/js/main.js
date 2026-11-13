@@ -7,7 +7,9 @@ import { COLORS, drawFrame, drawPreview, handleRadius } from "./draw.js";
 // Replaced at build time (scripts/build_web.py) with a short code that changes on every
 // deploy; adding it to URLs stops browsers from mixing old cached files with new ones.
 const VERSION = "__VERSION__";
-const MODEL_URL = `model/yolo26n.onnx?v=${VERSION}`;
+// The model gets its own code (hash of the model file only), so a code-only update doesn't
+// force visitors to download the 10 MB model again.
+const MODEL_URL = "model/yolo26n.onnx?v=__MODEL_VERSION__";
 const SAMPLE_URL = "samples/highway.mp4";
 // Browsers don't tell us a video's frame rate, so we step through every video at a fixed
 // 25 frames per second of video time (the sample video's own rate).

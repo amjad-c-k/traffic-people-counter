@@ -41,12 +41,14 @@ def build(model=DEFAULT_MODEL):
         if f.is_file() and f.suffix in {".html", ".js", ".onnx"}:
             h.update(f.read_bytes())
     version = h.hexdigest()[:8]
+    # Separate code for the model, so the 10 MB file is only re-downloaded when it changes.
+    model_version = hashlib.sha256((DIST / "model" / "yolo26n.onnx").read_bytes()).hexdigest()[:8]
     for f in [DIST / "index.html", *(DIST / "js").glob("*.js")]:
-        text = f.read_text(encoding="utf-8").replace("__VERSION__", version)
+        text = f.read_text(encoding="utf-8").replace("__MODEL_VERSION__", model_version).replace("__VERSION__", version)
         text = re.sub(r'(from\s+"\./[\w.]+\.js)(")', rf"\1?v={version}\2", text)  # versioned imports
         f.write_text(text, encoding="utf-8")
 
-    print(f"Built {DIST.relative_to(ROOT)} with model {model.name}, version {version}")
+    print(f"Built {DIST.relative_to(ROOT)} with model {model.name}, version {version}, model version {model_version}")
     return DIST
 
 
